@@ -2,7 +2,7 @@ Predicting the Bachelor Season 21
 ================
 
 The goal of this analysis is to build a model that will accurately predict the winner of the Bachelor season 21. The data in this analysis comes from the Wikipedia pages for each season of the Bachelor.
-*Note: There are no Wikipedia Pages for Seasons 3,4,6,7,or 8 and therefore, those seasons are excluded from this analysis*
+*Note: There are no Wikipedia Pages for Seasons 3,4,6,7,or 8 and therefore, they seasons are excluded from this analysis*
 
 Packages Needed
 ---------------
