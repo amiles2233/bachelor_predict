@@ -33,10 +33,6 @@ for(i in valid_seasons){
 
 contestant <- rename(contestant, Occupation=Job)
 
-# Save Result
-saveRDS(contestant, "contestant.RDS")
-
-
 
 # Pull Contestant Info, Current Season -----------------
 url <- "https://en.wikipedia.org/wiki/The_Bachelor_(season_21)"
@@ -44,10 +40,19 @@ contestant21 <- htmltab(doc=url, which='//*[@id="mw-content-text"]/table[2]')
 names(contestant21)[names(contestant21)=="Outcome"] <- "Eliminated"
 names(contestant21)[names(contestant21)=="Occupation"] <- "Job"
 
-contestant21 <- rename(contestant21, Occupation=Job)
+contestant21 <- rename(contestant21, Occupation=Job) %>%
+  select(-Place) %>%
+  mutate(season=21)
+  
 
-# Save Result
-saveRDS(contestant21, "contestant21.RDS")
+# Combine All Contestants
+contestant <- bind_rows(contestant, contestant21)
+
+# Lowercase names
+names(contestant) <- tolower(names(contestant))
+
+# Write Contestant CSV
+write.csv(contestant,"contestant.csv", row.names = FALSE)
 
 
 # Pull Bachelor Info, All Seasons --------------
@@ -73,8 +78,10 @@ Hometown <- c("Charolottesville, Virginia", "Butler, Missouri", "Toronto, Ontari
 bachelor$bdate <- bdate
 bachelor$Hometown <- Hometown
 
+names(bachelor) <- tolower(names(bachelor))
+
 # Save Results
-saveRDS(bachelor,"bachelor.RDS")
+write.csv(bachelor,"bachelor.csv", row.names=FALSE)
 
 
 

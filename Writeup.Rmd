@@ -1,0 +1,152 @@
+---
+title: "Data Science-ing the Bachelor Season 21"
+author: "Aaron Miles"
+date: "01/01/2016"
+output: html_document
+---
+## Intro
+
+2017 is going to start off with a pop culture bang. No, I'm not talking about the Inaugurtation (it's not pop culture if no celebrities are there, right?), the CFP Final, or even the NFL playoffs. I'm talking about the Bachelor, of course Since 2002, we've watched reality TV's finest compete for love and the opportunity to break off an engagement with that special someone 6 months later. 
+Why, you ask, would this matter for a data science blog? Inspired by [Alice Zhao's analysis](http://adashofdata.com/2015/02/18/the-data-behind-the-bachelor-the-bachelorette/), I wanted to look at how the numbers for this season compared to others as well as predict some of the season's outcomes so I can win my office fantasy league! While, it turns out, there are a lot of blogs and resources devoted to examining data within sports, pop culture, politics, society, and many other things, there is hardly and data science devoted to understanding and predicting the Bachelor! I, as a citizen data scientist, could not let this stand.
+
+### Methodology - What did I do?
+I scraped data from the Wikipedia pages for as many seasons of the Bachelor as had pages. These tables had age, hometown, and occupational information about bachelors as well as contestants. From this info I calculated age differences and hometown distances between contestants and bachelors. All of this was thrown into a model to estimate the probability of each contestant getting a hometown date, and getting the final rose. I left out seasons 9 and 12 from the analysis (seasons with an Italian and English bachelor), as the distance variables are fundamentally different for those seasons.
+
+```{r message=FALSE, include=FALSE}
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(scales)
+library(labeling)
+library(reshape2)
+```
+
+```{r include=FALSE}
+contestant <- read.csv("contestant_prepped.csv", stringsAsFactors = FALSE)
+bachelor <- read.csv("bachelor_prepped.csv", stringsAsFactors = FALSE)
+season <- read.csv("season_prepped.csv", stringsAsFactors = FALSE)
+s21 <- read.csv("s21_prepped.csv", stringsAsFactors = FALSE)
+
+## ID Current Season
+contestant$current <- ifelse(contestant$season==21,"Current","Previous")
+bachelor$current <- ifelse(bachelor$season==21,"Current","Previous")
+season$current <- ifelse(season$season==21,"Current","Previous")
+
+```
+
+## Descriptives
+### Age
+Nick's age has been a source of controversy heading into this season. Both [Chad](http://collegecandy.com/2016/08/31/chad-johnson-nick-viall-twitter-rant-the-bachelor-reaction-new-bachelor-tweets-details/) and [Robby](http://www.intouchweekly.com/posts/nick-viall-the-bachelor-chad-johnson-robby-hayes-exclusive-interview-112764) had things to say about it. But how does Nick's age actuallly compare to those of previous Bachelors?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(bachelor, aes(x=age_bach, fill=current)) +
+  geom_histogram(color="black") +
+  scale_fill_manual(values=c("red4","ivory2"), name="Season") +
+  theme_minimal() +
+  scale_y_continuous(breaks=c(0,1,2)) +
+  scale_x_continuous(breaks=seq(25,38,by=2)) +
+  xlab("Age") +
+  ylab("Bachelors") +
+  ggtitle("Ages of Bachelors")
+```
+
+Surprisingly, Nick is not the oldest at 36! That honor goes to Brad Womack, who was 38 during his second go round. Hey, if it works for Brad*, it can work for Nick, right? Right? ...  
+Anyway, lets take a look at how the age distribution of current contestants compares to that of previous seasons.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(contestant, aes(x=age, fill=current)) +
+  geom_density(alpha=.5) +
+  scale_fill_manual(values=c("red4","ivory2"), name="Season") +
+  theme_minimal() +
+  scale_y_continuous(labels=percent) +
+  xlab("Age") +
+  ylab("Density") +
+  ggtitle("Age Distribution of Bachelor Contestants")
+```
+
+Interestingly, the age distribution for this season isn't much different than that of previous seasons. If anything, it skews a little younger. That should make for an interesting dynamic this season! (We'll see if the old "Hi, I'm Nick and I was likelt going in Middle or High School when you were born, isn't that crazy?!" pick up line works). 
+
+### Occupations
+To categorize contestant occupations, I created a series of dummy variables for common contestant occupations (manager, nurse, sales, student, etc.). The following graph compares the number of contestants within each occupation this year with the average number of contestants in each occupation for all previous years.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+contestant %>%
+  select(season, current, manager:owner) %>%
+  group_by(season, current) %>%
+  summarize_each(funs(sum)) %>%
+  ungroup() %>%
+  select(-season) %>%
+  group_by(current) %>%
+  summarise_each(funs(mean)) %>%
+  melt() %>%
+  ggplot(aes(x=variable, y=value, fill=current)) +
+  geom_bar(position="dodge", stat="identity", color="black") +
+  scale_fill_manual(values=c("red4","ivory2"), name="Season") +
+  theme_minimal() +
+  xlab("Occupations") +
+  ylab("Contestants") +
+  ggtitle("Bachelor Contestant Occupations",
+          subtitle="Previous Seasons Averaged")
+```
+
+We have some BOSS ladies this season! The categories that stand out most are Manager, Nurse, and Owner. I'm so looking forward to the squabbles about whose business is bigger (detailed under the 'Sickest Burns' section [here](https://theringer.com/bachelor-abc-bios-nick-viall-contestants-dolphins-43658e890831#.82oxaoklz))  
+
+### Geography
+Where are contestants from this year? Let's map it out and see. *Note: This map obviously leaves out some contestants from previous years. For the sake of this analysis, I just wanted to focus on the continental US in order to more easily spot any variation*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+contestLoc <- c(-130,22,-60,55)
+map <- get_map(contestLoc, source="stamen", maptype = "toner")
+ggmap(map) +
+  geom_point(data=contestant, aes(x=lon, y=lat, color=current)) +
+  theme_void() +
+  scale_color_manual(values=c("red3","rosybrown3"), name="Season") +
+  ggtitle("Bachelor Contestant Locations")
+
+```
+
+Overall, it doesn't seem like there are any substantial breaks from previous seasons. Geographically, the Bachelor is an equal opportunity show! But how far away are this season's contestants compared to previous seasons? Will they have to overcome quirky regional quirks moreso or less than we've seen in the past?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(season, aes(x=distance, fill=current)) +
+  geom_density(alpha=.5) +
+  scale_fill_manual(values=c("red4","ivory2"), name="Season") +
+  theme_minimal() +
+  scale_y_continuous(labels=percent) +
+  scale_x_continuous(labels=comma) +
+  xlab("Distance (Miles)") +
+  ylab("Density") +
+  ggtitle("Bachelor-Contestant Distance Distribution")
+
+```
+
+The bimodal distribution here is interesting. Nick's got a larger proportion of contestants from ~2,000 miles from his hometown (Milwaukee, Wisconsin). From this and the map above, it looks like there are two distinct groups here: Middle America (mode 1), and Everyone else (mode 2). Something to keep an eye on as the season goes on.  
+
+## Model Prediction (Come on, Aaron, who's gonna win!?)
+To predict final rose and hometown date probability, I trained a model on all available previous seasons using contestant age, age difference to bachelor, occupation (a series of dummy variables), contestant geographic region (based on a clusting of hometown locations), and distance between contestant and bachelor hometowns as the varaibles in my model. It turns out these variables aren't SUPER predictive of getting a final rose or a hometown date (~.57 AUC for final rose and ~.50 AUC for hometown date *for reference, a model with a .50 AUC score performs about as well as just randomly guessing*), so don't go betting your house on the results here. Shocker, I know. With that said, let's take a look at the maybe slightly better than random guessing output!
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(s21, aes(x=win, y=top4, label=name)) +
+  geom_point() +
+  geom_label(size=2.5, vjust=-.1, hjust=-.1) +
+  scale_y_continuous(labels=percent, limits=c(0,.65)) +
+  scale_x_continuous(labels=percent, limits=c(0,.65)) +
+  xlab("Probability of Getting Final Rose") +
+  ylab("Probability of Getting Hometown Date") +
+  ggtitle("Bachelor Outcome Probabilities")
+
+```
+
+The clear favorite hear seems to be [Danielle Maltby](http://abc.go.com/shows/the-bachelor/cast/danielle-m). What is likely driving this is that she is 31 (small age difference from Nick), originally from Wisconsin (though her ABC bio says Nashville), and she's a Nurse. The pretenders look to be [Olivia](http://abc.go.com/shows/the-bachelor/cast/olivia), [Jaimi King](http://abc.go.com/shows/the-bachelor/cast/jaimi), and [Elizabeth Whitelaw](http://abc.go.com/shows/the-bachelor/cast/elizabeth); these three have high hometown date probabilities, but substantially lower final rose probabilities. [Ida Marie](http://abc.go.com/shows/the-bachelor/cast/ida-marie) is a bit of a sleeper, with the second highest final rose probability, but middle of the road hometown date probabilities. (Let's hope her [literary humility](https://theringer.com/bachelor-abc-bios-nick-viall-contestants-dolphins-43658e890831#.mqe39bhfm) helps separate her from the pack!)
+
+## Conclusion
+Danielle M is our girl! Now that data justice has been served to the Bachelor
+
+
+
+
+
+
+
+
